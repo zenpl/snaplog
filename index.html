@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="SnapLog">
+<title>SnapLog</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    background: #0a0a0a;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    user-select: none;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 60px;
+  }
+
+  /* Big record button */
+  .btn-record {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    border: 3px solid #333;
+    background: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+  }
+
+  .btn-record:active { transform: scale(0.95); }
+
+  .btn-record.recording {
+    border-color: #e53e3e;
+    background: #1a0a0a;
+    animation: pulse 2s infinite;
+  }
+
+  .btn-record.paused {
+    border-color: #d69e2e;
+    background: #1a160a;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.3); }
+    50% { box-shadow: 0 0 0 16px rgba(229, 62, 62, 0); }
+  }
+
+  .btn-record svg {
+    width: 48px;
+    height: 48px;
+  }
+
+  .dot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #e53e3e;
+  }
+
+  .dot.paused {
+    background: #d69e2e;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Timer */
+  .timer {
+    font-size: 42px;
+    font-weight: 200;
+    letter-spacing: 0.05em;
+    margin: 40px 0 16px;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+  }
+
+  .status {
+    font-size: 13px;
+    color: #555;
+    height: 18px;
+    margin-bottom: 48px;
+  }
+
+  .status.recording { color: #e53e3e; }
+  .status.paused { color: #d69e2e; }
+  .status.processing { color: #63b3ed; }
+
+  /* Control buttons */
+  .controls {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+
+  .btn {
+    padding: 12px 28px;
+    border-radius: 100px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #ccc;
+    font-size: 15px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.15s;
+  }
+
+  .btn:active { opacity: 0.7; }
+  .btn.primary { background: #e53e3e; border-color: #e53e3e; color: #fff; }
+  .btn.secondary { background: #2a2a2a; }
+  .btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  /* Transcript area */
+  .transcript-box {
+    width: 100%;
+    max-width: 480px;
+    background: #141414;
+    border: 1px solid #222;
+    border-radius: 16px;
+    padding: 16px;
+    min-height: 80px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #aaa;
+    white-space: pre-wrap;
+    display: none;
+  }
+
+  .transcript-box.visible { display: block; }
+
+  .transcript-label {
+    font-size: 11px;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+    display: none;
+  }
+  .transcript-label.visible { display: block; }
+
+  /* Segments list */
+  .segments {
+    width: 100%;
+    max-width: 480px;
+    margin-top: 12px;
+  }
+
+  .segment {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #777;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .seg-num {
+    color: #333;
+    min-width: 20px;
+  }
+
+  .seg-text { color: #999; flex: 1; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1e3a5f;
+    color: #90cdf4;
+    padding: 10px 20px;
+    border-radius: 100px;
+    font-size: 14px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .toast.error {
+    background: #3a1e1e;
+    color: #fc8181;
+  }
+
+  /* Settings */
+  .settings-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #555;
+    font-size: 18px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 100;
+    align-items: flex-end;
+  }
+
+  .modal.open { display: flex; }
+
+  .modal-inner {
+    background: #141414;
+    border-top: 1px solid #222;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 24px 48px;
+    width: 100%;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #fff;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    font-size: 12px;
+    color: #555;
+    display: block;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .field input {
+    width: 100%;
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #ccc;
+    font-size: 14px;
+    outline: none;
+  }
+
+  .field input:focus { border-color: #444; }
+
+  .modal-save {
+    width: 100%;
+    padding: 14px;
+    background: #fff;
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="settings-btn" onclick="openSettings()">⚙</div>
+
+<h1>SnapLog</h1>
+<p class="subtitle">录音 · 转录 · 发送</p>
+
+<div class="btn-record" id="btnRecord" onclick="toggleRecord()">
+  <div class="dot" id="dot"></div>
+</div>
+
+<div class="timer" id="timer">0:00</div>
+<div class="status" id="status">点击开始录音</div>
+
+<div class="controls">
+  <button class="btn secondary" id="btnPause" onclick="togglePause()" disabled>暂停</button>
+  <button class="btn primary" id="btnStop" onclick="stopAndTranscribe()" disabled>完成</button>
+</div>
+
+<div class="transcript-label" id="transcriptLabel">转录结果</div>
+<div class="transcript-box" id="transcriptBox"></div>
+<div class="segments" id="segments"></div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Settings Modal -->
+<div class="modal" id="modal">
+  <div class="modal-inner">
+    <div class="modal-title">设置</div>
+    <div class="field">
+      <label>Groq API Key</label>
+      <input type="password" id="cfgGroq" placeholder="gsk_...">
+    </div>
+    <div class="field">
+      <label>Telegram Bot Token</label>
+      <input type="password" id="cfgBot" placeholder="123456:ABC...">
+    </div>
+    <div class="field">
+      <label>Telegram Chat ID</label>
+      <input type="text" id="cfgChat" placeholder="-1003800730845">
+    </div>
+    <div class="field">
+      <label>场景标签（可选）</label>
+      <input type="text" id="cfgLabel" placeholder="brainstorm / 会议 / 灵感">
+    </div>
+    <button class="modal-save" onclick="saveSettings()">保存</button>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+const CFG_KEYS = ['groqKey', 'botToken', 'chatId', 'sceneLabel'];
+
+function loadConfig() {
+  return {
+    groqKey:    localStorage.getItem('groqKey')    || '',
+    botToken:   localStorage.getItem('botToken')   || '',
+    chatId:     localStorage.getItem('chatId')     || '',
+    sceneLabel: localStorage.getItem('sceneLabel') || '',
+  };
+}
+
+function openSettings() {
+  const cfg = loadConfig();
+  document.getElementById('cfgGroq').value  = cfg.groqKey;
+  document.getElementById('cfgBot').value   = cfg.botToken;
+  document.getElementById('cfgChat').value  = cfg.chatId;
+  document.getElementById('cfgLabel').value = cfg.sceneLabel;
+  document.getElementById('modal').classList.add('open');
+}
+
+function saveSettings() {
+  localStorage.setItem('groqKey',    document.getElementById('cfgGroq').value.trim());
+  localStorage.setItem('botToken',   document.getElementById('cfgBot').value.trim());
+  localStorage.setItem('chatId',     document.getElementById('cfgChat').value.trim());
+  localStorage.setItem('sceneLabel', document.getElementById('cfgLabel').value.trim());
+  document.getElementById('modal').classList.remove('open');
+  showToast('设置已保存');
+}
+
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+
+// ── State ────────────────────────────────────────────────
+let mediaRecorder = null;
+let audioChunks   = [];
+let segments      = [];   // [{blob, duration}]
+let isRecording   = false;
+let isPaused      = false;
+let timerInterval = null;
+let elapsed       = 0;    // seconds
+let segmentStart  = 0;
+
+// ── UI helpers ───────────────────────────────────────────
+function setStatus(text, cls) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function setTimer(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  document.getElementById('timer').textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function setRecordingUI(recording, paused) {
+  const btn  = document.getElementById('btnRecord');
+  const dot  = document.getElementById('dot');
+  const pBtn = document.getElementById('btnPause');
+  const sBtn = document.getElementById('btnStop');
+
+  if (!recording && !paused) {
+    btn.className = 'btn-record';
+    dot.className = 'dot';
+    pBtn.disabled = true;
+    sBtn.disabled = true;
+    pBtn.textContent = '暂停';
+  } else if (recording) {
+    btn.className = 'btn-record recording';
+    dot.className = 'dot';
+    pBtn.disabled = false;
+    sBtn.disabled = false;
+    pBtn.textContent = '暂停';
+  } else if (paused) {
+    btn.className = 'btn-record paused';
+    dot.className = 'dot paused';
+    pBtn.disabled = false;
+    sBtn.disabled = false;
+    pBtn.textContent = '继续';
+  }
+}
+
+// ── Recording ─────────────────────────────────────────────
+async function toggleRecord() {
+  if (isRecording || isPaused) return; // ignore tap when active
+  await startRecording();
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: bestMime() });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.start(500);
+
+    isRecording = true;
+    isPaused    = false;
+    segmentStart = elapsed;
+
+    setRecordingUI(true, false);
+    setStatus('录音中…', 'recording');
+    startTimer();
+
+    // Clear previous result
+    document.getElementById('transcriptLabel').className = 'transcript-label';
+    document.getElementById('transcriptBox').className   = 'transcript-box';
+    document.getElementById('transcriptBox').textContent = '';
+    document.getElementById('segments').innerHTML = '';
+    segments = [];
+
+  } catch(err) {
+    showToast('无法访问麦克风', true);
+    console.error(err);
+  }
+}
+
+function bestMime() {
+  const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+function togglePause() {
+  if (!mediaRecorder) return;
+
+  if (!isPaused) {
+    // Pause
+    mediaRecorder.pause();
+    clearInterval(timerInterval);
+    isRecording = false;
+    isPaused    = true;
+
+    // Save segment
+    const segBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+    segments.push({ blob: segBlob, duration: elapsed - segmentStart });
+    audioChunks = [];
+
+    setRecordingUI(false, true);
+    setStatus('已暂停', 'paused');
+
+  } else {
+    // Resume
+    mediaRecorder.resume();
+    audioChunks = [];
+    segmentStart = elapsed;
+    isRecording = true;
+    isPaused    = false;
+
+    setRecordingUI(true, false);
+    setStatus('录音中…', 'recording');
+    startTimer();
+  }
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    elapsed++;
+    setTimer(elapsed);
+  }, 1000);
+}
+
+async function stopAndTranscribe() {
+  if (!mediaRecorder) return;
+  clearInterval(timerInterval);
+
+  // Collect last segment
+  await new Promise(resolve => {
+    mediaRecorder.onstop = resolve;
+    mediaRecorder.stop();
+  });
+
+  // Stop all tracks
+  mediaRecorder.stream.getTracks().forEach(t => t.stop());
+
+  const lastBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+  if (lastBlob.size > 0) {
+    segments.push({ blob: lastBlob, duration: elapsed - segmentStart });
+  }
+
+  isRecording = false;
+  isPaused    = false;
+  setRecordingUI(false, false);
+  setStatus('转录中…', 'processing');
+
+  try {
+    const cfg = loadConfig();
+    let fullText = '';
+
+    for (let i = 0; i < segments.length; i++) {
+      setStatus(`转录第 ${i+1}/${segments.length} 段…`, 'processing');
+      const text = await transcribeBlob(segments[i].blob, cfg.groqKey);
+      fullText += (fullText ? '\n' : '') + text;
+      addSegmentUI(i + 1, text);
+    }
+
+    // Show result
+    document.getElementById('transcriptLabel').className = 'transcript-label visible';
+    document.getElementById('transcriptBox').className   = 'transcript-box visible';
+    document.getElementById('transcriptBox').textContent = fullText;
+
+    setStatus('转录完成，发送中…', 'processing');
+    await sendTelegram(fullText, elapsed, cfg);
+
+    setStatus('已发送到 Telegram ✓');
+    showToast('转录完成并发送 ✓');
+
+  } catch(err) {
+    setStatus('出错了');
+    showToast(err.message || '转录失败', true);
+    console.error(err);
+  }
+
+  elapsed = 0;
+  setTimer(0);
+}
+
+async function transcribeBlob(blob, groqKey) {
+  const ext  = blob.type.includes('mp4') ? 'm4a' : 'webm';
+  const form = new FormData();
+  form.append('file', blob, 'audio.' + ext);
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('language', 'zh');
+  form.append('response_format', 'json');
+
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + groqKey },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error('Groq 错误: ' + err);
+  }
+
+  const data = await res.json();
+  return (data.text || '').trim();
+}
+
+async function sendTelegram(text, totalSecs, cfg) {
+  const m   = Math.floor(totalSecs / 60);
+  const s   = totalSecs % 60;
+  const dur = m + ':' + String(s).padStart(2, '0');
+  const now = new Date().toLocaleString('zh-CN', { hour12: false });
+  const label = cfg.sceneLabel ? `\n🏷 ${cfg.sceneLabel}` : '';
+
+  const msg = `📝 SnapLog · ${now}${label}\n⏱ 时长：${dur}\n\n${text}`;
+
+  const res = await fetch(
+    `https://api.telegram.org/bot${cfg.botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: cfg.chatId, text: msg }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error('Telegram 错误: ' + err);
+  }
+}
+
+function addSegmentUI(num, text) {
+  const el = document.createElement('div');
+  el.className = 'segment';
+  el.innerHTML = `<span class="seg-num">${num}</span><span class="seg-text">${text}</span>`;
+  document.getElementById('segments').appendChild(el);
+}
+</script>
+</body>
+</html>

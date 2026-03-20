@@ -386,6 +386,14 @@ document.getElementById('modal').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('open');
 });
 
+// Auto-open settings on first run
+window.addEventListener('DOMContentLoaded', () => {
+  const cfg = loadConfig();
+  if (!cfg.groqKey || !cfg.botToken || !cfg.chatId) {
+    openSettings();
+  }
+});
+
 // ── State ────────────────────────────────────────────────
 let mediaRecorder = null;
 let audioChunks   = [];
